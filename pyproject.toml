@@ -1,0 +1,11 @@
+[project]
+name = "road-network-analysis"
+version = "0.1.0"
+description = "AI6128 Project 2 trajectory and road-network analysis"
+requires-python = ">=3.12"
+dependencies = [
+    "matplotlib>=3.10,<4",
+    "osmnx>=2.0,<3",
+    "pandas>=3.0,<4",
+]
+

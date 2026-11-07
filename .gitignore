@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.py[cod]
+
+# Source archives, downloaded network data, and generated results
+*.zip
+train.csv
+data/cache/
+AI6128 Project 2 Description(1).pdf
+
