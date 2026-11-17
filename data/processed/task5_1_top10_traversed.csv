@@ -1,0 +1,11 @@
+rank,segment_id,traversals,distinct_trips,name,highway,length,u,v
+1,1055,121,121,"['Praça de Dom João I', 'Rua do Doutor Magalhães Lemos']",secondary,197.1,138234852,25620747
+2,19050,113,113,Praça de Almeida Garrett,secondary,39.8,3092601795,2204100011
+3,19625,102,102,Praça da Liberdade,secondary,26.7,3554720424,2245520806
+4,21780,99,99,Avenida da Associação Empresarial de Portugal,motorway,1063.0,4722746602,112263308
+5,27,99,99,Rua Elísio de Melo,secondary,13.6,25620737,1386051849
+6,17173,96,96,Rua de Dom Manuel II,secondary,104.9,1874214575,25632362
+7,20211,94,94,Rua de Sá da Bandeira,secondary,205.1,3992990334,138234852
+8,22214,93,93,Rua da Estação,tertiary,189.3,4942615695,1393866615
+9,995,92,92,Rua de Faria Guimarães,secondary,194.0,137992808,137994720
+10,1005,92,92,Rua de Faria Guimarães,secondary,132.2,137994720,137992807
