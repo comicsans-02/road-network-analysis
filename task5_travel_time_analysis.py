@@ -6,17 +6,24 @@ at any position on the route is interpolated; the travel time of a segment is th
 entering and leaving it. Only segments fully crossed between the first and last matched point
 count (the partly crossed first and last ones are skipped).
 
+Routes: by default P2's Task 3 CSV (data/processed/matched_1500.csv). Its segment ids are the 0-based
+position of the edge in list(G.edges(keys=True)) of porto_drive.graphml, and trip_index is the position
+among the trips with at least two GPS points. The CSV does not say which GPS points were matched, so a
+point is used only if it lies within --max-dist metres of the route (points past the end of a route
+that stopped early are dropped). --routes leuven uses our reproduced routes (leuven_1500.csv) with the
+matcher's matched-point count instead.
+
 Waiting: a taxi standing still (pick-up, drop-off, red light) inflates the average. Two clocks
 are kept: "with waiting" (plain timestamps) and "moving" (steps where the taxi advanced less than
 --dwell-m metres count as 0 s). The ranking uses the moving clock unless --rank wait.
 Travel time grows with segment length, so long roads rank high; average speed is in the CSV.
 
-Needs (run first): task6_robust_matching.py (baseline routes) and build_segment_id_map.py.
-Usage: python task5_travel_time_analysis.py [--min-obs 10] [--dwell-m 10] [--rank move|wait]
+Usage: python task5_travel_time_analysis.py [--routes p2|leuven] [--min-obs 10] [--dwell-m 10]
+       [--max-dist 50] [--rank move|wait]   (--routes leuven needs task6_robust_matching.py first)
 
-Outputs in data/processed/: task5_top10_avgtime.csv, task5_all_avgtime.csv,
+Outputs in data/processed/: task5_top10_avgtime.csv, task5_all_avgtime.csv, task5_top10_traversed.csv,
 task5_3_top10_avgtime.png, task5_3_top10_traversed.png.
-The traversed top 10 used for 5(3) is counted here from P2's matched_1500.csv (total traversals).
+The traversed top 10 (Task 5(1), used for 5(3)) is counted from P2's matched_1500.csv (total traversals).
 """
 import argparse
 import json
@@ -35,6 +42,7 @@ LON0, LAT0 = -8.61, 41.15
 KX, KY = 111320 * np.cos(np.radians(LAT0)), 110540  # metres per degree
 
 G = ox.load_graphml(DATA / "porto_drive.graphml")
+EDGES = list(G.edges(keys=True, data="length"))  # P2's segment id = position in this list
 E = ox.graph_to_gdfs(G, nodes=False).reset_index().sort_values("length").drop_duplicates(["u", "v"])
 GEOM = dict(zip(zip(E.u, E.v), E.geometry))
 _MGEOM = {}
@@ -47,7 +55,7 @@ def edge_m(uv):
     return _MGEOM[uv]
 
 
-def place_points(path, pts):
+def place_points(path, pts, max_dist=np.inf):
     """Return (edges, chainage at each edge start, [(edge index, chainage)] per point)."""
     edges = [e for e in zip(path, path[1:]) if e in GEOM]
     geoms = [edge_m(e) for e in edges]
@@ -64,14 +72,16 @@ def place_points(path, pts):
                 best = (d, k, start[k] + geoms[k].project(p))
         if best is None:
             break
+        if best[0] > max_dist:  # point not explained by the route (outlier, or past its end)
+            continue
         j = best[1]
         out.append((j, max(best[2], out[-1][1]) if out else best[2]))
     return edges, start, out
 
 
-def trip_segment_times(path, pts, dwell_m):
+def trip_segment_times(path, pts, dwell_m, max_dist=np.inf):
     """List of (edge, time with waiting, time moving) for every segment fully crossed, or None."""
-    edges, start, placed = place_points(path, pts)
+    edges, start, placed = place_points(path, pts, max_dist)
     if len(placed) < 3:
         return None
     s = np.array([p[1] for p in placed])
@@ -135,18 +145,34 @@ def main():
     ap.add_argument("--min-obs", type=int, default=10, help="min timed traversals for a segment to be ranked")
     ap.add_argument("--dwell-m", type=float, default=10.0, help="advance per 15 s step below this counts as standing still")
     ap.add_argument("--rank", choices=["move", "wait"], default="move")
+    ap.add_argument("--routes", choices=["p2", "leuven"], default="p2")
+    ap.add_argument("--max-dist", type=float, default=50.0, help="p2 routes: ignore GPS points farther from the route")
     a = ap.parse_args()
 
     trips = pd.read_csv(DATA / "train-1500.csv", dtype=str)
-    routes = pd.read_csv(DATA / "leuven_1500.csv").fillna("")
+    polylines = [json.loads(s) for s in trips.POLYLINE]
+    p2 = pd.read_csv(DATA / "matched_1500.csv", dtype=str).fillna("")
+    jobs = []  # (node path, GPS points, max distance)
+    if a.routes == "p2":
+        valid = [i for i, p in enumerate(polylines) if len(p) >= 2]
+        for r in p2.itertuples():
+            nodes = []
+            for i in (int(x) for x in r.road_segment_ids.split()):
+                u, v = EDGES[i][:2]
+                if not nodes or nodes[-1] != u:
+                    nodes.append(u)
+                nodes.append(v)
+            jobs.append((nodes, polylines[valid[int(r.trip_index)]], a.max_dist))
+    else:
+        routes = pd.read_csv(DATA / "leuven_1500.csv").fillna("")
+        for pts, r in zip(polylines, routes.itertuples()):
+            jobs.append(([int(x) for x in r.nodes.split(",") if x], pts[:int(r.n_matched)], np.inf))
     tw, tm = defaultdict(list), defaultdict(list)
     n_used = 0
-    for polyline, r in zip(trips.POLYLINE, routes.itertuples()):
-        path = [int(x) for x in r.nodes.split(",") if x]
-        k = int(r.n_matched)
-        if len(path) < 3 or k < 3:
+    for path, pts, md in jobs:
+        if len(path) < 3 or len(pts) < 3:
             continue
-        res = trip_segment_times(path, json.loads(polyline)[:k], a.dwell_m)
+        res = trip_segment_times(path, pts, a.dwell_m, md)
         if res is None:
             continue
         n_used += 1
@@ -155,9 +181,10 @@ def main():
             tm[e].append(m)
     print(f"trips used: {n_used}; segments with a timed traversal: {len(tw)}")
 
-    idmap = pd.read_csv(DATA / "segment_id_map.csv")
-    uv2id = dict(zip(zip(idmap.u, idmap.v), idmap.id))
-    id2uv = dict(zip(idmap.id, zip(idmap.u, idmap.v)))
+    uv2id = {}  # (u, v) -> id of its shortest parallel edge, the one whose geometry is used
+    for i, (u, v, _, length) in enumerate(EDGES):
+        if (u, v) not in uv2id or length < EDGES[uv2id[(u, v)]][3]:
+            uv2id[(u, v)] = i
     info = E.set_index(["u", "v"])
     rows = []
     for uv, w in tw.items():
@@ -176,14 +203,18 @@ def main():
     print(f"top 10 by {key} (dwell threshold {a.dwell_m} m per step):")
     print(top_time.drop(columns=["u", "v"]).round(1).to_string())
 
-    # 5(3): plot the most traversed segments (P2's ids) and the slowest-to-cross segments
-    p2 = pd.read_csv(DATA / "matched_1500.csv", dtype=str).fillna("")
+    # 5(1): most traversed segments (P2's ids); 5(3): plot both sets
     traversals = Counter(int(x) for s in p2.road_segment_ids for x in s.split())
+    trips_with = Counter(i for s in p2.road_segment_ids for i in {int(x) for x in s.split()})
     top_ids = [i for i, _ in traversals.most_common(10)]
-    missing = [i for i in top_ids if i not in id2uv]
-    if missing:
-        print("warning: top-10 traversed ids not in segment_id_map.csv:", missing)
-    plot_top([id2uv[i] for i in top_ids if i in id2uv], "5(1) Top 10 most traversed segments",
+    trav = pd.DataFrame([(i, traversals[i], trips_with[i], EDGES[i][0], EDGES[i][1], info.loc[EDGES[i][:2], "length"],
+                          info.loc[EDGES[i][:2], "name"], info.loc[EDGES[i][:2], "highway"]) for i in top_ids],
+                        columns=["segment_id", "traversals", "trips", "u", "v", "length_m", "name", "highway"])
+    trav.to_csv(DATA / "task5_top10_traversed.csv", index=False)
+    print("top 10 most traversed (P2 ids):")
+    print(trav.drop(columns=["u", "v"]).round(1).to_string())
+    print("next counts:", [c for _, c in traversals.most_common(14)][10:])
+    plot_top([EDGES[i][:2] for i in top_ids], "5(1) Top 10 most traversed segments",
              "task5_3_top10_traversed.png", "crimson")
     kind = "excluding stops" if a.rank == "move" else "including waiting"
     plot_top(list(zip(top_time.u, top_time.v)), f"5(2) Top 10 segments by average travel time, {kind}",

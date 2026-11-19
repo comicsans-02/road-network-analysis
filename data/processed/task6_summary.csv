@@ -1,3 +1,5 @@
-run,trips >=2 pts,no route,coverage<0.7,mean coverage,median len_ratio,len_ratio<0.7,len_ratio>1.5
-before,1481,1,345,0.842,1.06,327,39
-after,1481,0,1,0.989,1.09,48,104
+run,trips >=2 pts,no route,coverage<0.7,mean coverage,matched points<0.7,median len_ratio,len_ratio<0.7,len_ratio>1.5,median gps_dist m,gps_dist>50m,mean off_route,off_route>0.2,trips with gaps,gaps,gap length km
+p2,1481,0,216,0.878,,1.066,184,31,6.1,252,0.045,102,43,57,18.4
+_robust,1481,0,37,0.956,0.0,1.084,14,79,5.9,47,0.049,111,68,108,414.8
+base,1481,0,216,0.878,193.0,1.067,183,37,6.1,252,0.044,100,0,0,0.0
+_robust_look1,1481,0,27,0.959,0.0,1.087,3,90,5.9,26,0.049,108,118,182,591.2
