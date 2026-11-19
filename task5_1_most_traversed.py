@@ -22,7 +22,7 @@ counts = (routes_explode.groupby("segment_id")
           .reset_index())
 top10 = counts.sort_values("traversals", ascending=False).head(10)
 
-id_map = pd.read_csv(data_dir / "segment_id_map.csv")          # id, u, v
+id_map = pd.read_csv(data_dir / "segment_id_map_p2.csv")          # id, u, v
 top10 = top10.merge(id_map, left_on="segment_id", right_on="id", how="left")
 top10 = top10.merge(edges[["u", "v", "name", "highway", "length"]],
                     on=["u", "v"], how="left")
