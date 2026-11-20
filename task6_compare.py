@@ -15,7 +15,7 @@ For our own Leuven runs the share of points the matcher itself matched is also r
 
 Runs (--runs, first two are compared per trip and plotted):
   p2            data/processed/matched_1500.csv, the Task 3 deliverable (segment id = row of the
-                edge GeoDataFrame after reset_index(), trip_index = position among trips with >= 2 points)
+                edge GeoDataFrame after reset_index(), trip_index = row in train-1500.csv)
   base          data/processed/leuven_1500.csv, our reproduction of Task 3 with PYTHONHASHSEED=0
   _robust, ...  data/processed/leuven_1500<tag>.csv from task6_robust_matching.py --robust --tag <tag>
 
@@ -65,7 +65,6 @@ XY = {n: (d["x"], d["y"]) for n, d in G.nodes(data=True)}
 trips = pd.read_csv(DATA / "train-1500.csv", nrows=N, dtype=str)
 gps = [np.array(json.loads(s), dtype=float).reshape(-1, 2) for s in trips.POLYLINE]
 gps_len = [haversine_m(p[:-1], p[1:]).sum() if len(p) > 1 else 0.0 for p in gps]
-VALID = [i for i, p in enumerate(gps) if len(p) >= 2]
 
 LON0, LAT0 = -8.61, 41.15
 KX, KY = 111320 * np.cos(np.radians(LAT0)), 110540  # metres per degree (local projection)
@@ -109,7 +108,7 @@ def load(run):
                 if not nodes or nodes[-1] != u:
                     nodes.append(u)
                 nodes.append(v)
-            paths[VALID[int(r.trip_index)]] = nodes
+            paths[int(r.trip_index)] = nodes
         d = pd.DataFrame({"path": [paths.get(t, []) for t in range(N)]})
         d["n_matched"] = np.nan  # not recorded in the Task 3 CSV
     else:

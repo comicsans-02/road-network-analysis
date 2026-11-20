@@ -7,8 +7,8 @@ entering and leaving it. Only segments fully crossed between the first and last 
 count (the partly crossed first and last ones are skipped).
 
 Routes: by default P2's Task 3 CSV (data/processed/matched_1500.csv). Its segment ids are the 0-based
-position of the edge in list(G.edges(keys=True)) of porto_drive.graphml, and trip_index is the position
-among the trips with at least two GPS points. The CSV does not say which GPS points were matched, so a
+position of the edge in list(G.edges(keys=True)) of porto_drive.graphml, and trip_index is the row in
+train-1500.csv (trips with fewer than two GPS points have an empty route and are skipped). The CSV does not say which GPS points were matched, so a
 point is used only if it lies within --max-dist metres of the route (points past the end of a route
 that stopped early are dropped). --routes leuven uses our reproduced routes (leuven_1500.csv) with the
 matcher's matched-point count instead.
@@ -154,15 +154,16 @@ def main():
     p2 = pd.read_csv(DATA / "matched_1500.csv", dtype=str).fillna("")
     jobs = []  # (node path, GPS points, max distance)
     if a.routes == "p2":
-        valid = [i for i, p in enumerate(polylines) if len(p) >= 2]
         for r in p2.itertuples():
+            if not r.road_segment_ids.strip():
+                continue  # trip with fewer than two GPS points: no route
             nodes = []
             for i in (int(x) for x in r.road_segment_ids.split()):
                 u, v = EDGES[i][:2]
                 if not nodes or nodes[-1] != u:
                     nodes.append(u)
                 nodes.append(v)
-            jobs.append((nodes, polylines[valid[int(r.trip_index)]], a.max_dist))
+            jobs.append((nodes, polylines[int(r.trip_index)], a.max_dist))
     else:
         routes = pd.read_csv(DATA / "leuven_1500.csv").fillna("")
         for pts, r in zip(polylines, routes.itertuples()):
